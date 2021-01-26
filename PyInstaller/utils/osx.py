@@ -172,3 +172,38 @@ def fix_exe_for_code_signing(filename):
             fat.to_fileobj(fp)
             for arch in archs:
                 arch.to_fileobj(fp)
+
+
+def _get_arch_string(header):
+    """
+    Converts cputype and cpusubtype from mach_o.mach_header_64 into
+    arch string comparible with lipo/codesign. The list of supported
+    architectures can be found in man(1) arch.
+    """
+    # NOTE: the constants below are taken from macholib.mach_o
+    cputype = header.cputype
+    cpusubtype = header.cpusubtype & 0x0FFFFFFF
+    if cputype == 0x01000000 | 7:
+        if cpusubtype == 8:
+            return 'x86_64h'  # 64-bit intel (haswell)
+        else:
+            return 'x86_64'  # 64-bit intel
+    elif cputype == 0x01000000 | 12:
+        if cpusubtype == 2:
+            return 'arm64e'
+        else:
+            return 'arm64'
+    elif cputype == 7:
+        return 'i386'  # 32-bit intel
+    assert False, 'Unhandled architecture!'
+
+
+def get_exe_architectures(filename):
+    """
+    Inspects the given executable and returns tuple (is_fat, archs),
+    where is_fat is boolean indicating fat/thin binary, and arch is
+    list of architectures with lipo/codesign compatible names.
+    """
+    executable = MachO(filename)
+    return bool(executable.fat), [_get_arch_string(hdr.header)
+                                  for hdr in executable.headers]
